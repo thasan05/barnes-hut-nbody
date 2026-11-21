@@ -1,0 +1,38 @@
+{
+  "name": "barnes-hut-nbody",
+  "version": "1.0.0",
+  "description": "An O(N log N) Barnes-Hut N-body gravitational simulation engine featuring symplectic leapfrog integration, quadtree spatial decomposition, and interactive visualization.",
+  "type": "module",
+  "main": "dist/core/Integrator.js",
+  "types": "dist/core/Integrator.d.ts",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "benchmark": "npx tsx scripts/benchmark.ts",
+    "cli": "npx tsx scripts/cli.ts"
+  },
+  "keywords": [
+    "n-body-simulation",
+    "barnes-hut",
+    "quadtree",
+    "astrophysics",
+    "computational-physics",
+    "symplectic-integrator",
+    "leapfrog",
+    "typescript",
+    "canvas",
+    "algorithms"
+  ],
+  "author": "Tanvir Hasan <tanvirhasan.career@gmail.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "vitest": "^2.1.8"
+  }
+}
