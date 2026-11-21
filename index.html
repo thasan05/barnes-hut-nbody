@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barnes-Hut N-Body Gravitational Engine</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='18' fill='%2338bdf8'/><circle cx='80' cy='30' r='6' fill='%23f43f5e'/><circle cx='25' cy='75' r='8' fill='%23fbbf24'/></svg>">
+  <style>
+    :root {
+      --bg: #08090c;
+      --panel-bg: rgba(13, 15, 20, 0.82);
+      --border: rgba(255, 255, 255, 0.09);
+      --border-focus: rgba(56, 189, 248, 0.5);
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-hover: #0ea5e9;
+      --danger: #f43f5e;
+      --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Consolas, monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #sim-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+
+    /* Floating Panels */
+    .glass-panel {
+      position: absolute;
+      background: var(--panel-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+      z-index: 10;
+      transition: border-color 0.15s ease;
+    }
+
+    .glass-panel:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    /* Top Left: Title & Controls */
+    #panel-controls {
+      top: 20px;
+      left: 20px;
+      width: 320px;
+      padding: 18px;
+    }
+
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-title svg {
+      width: 20px;
+      height: 20px;
+      fill: none;
+      stroke: var(--accent);
+      stroke-width: 2;
+    }
+
+    .header-title h1 {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: #fff;
+    }
+
+    .header-title .tag {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--accent);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .control-group {
+      margin-bottom: 14px;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 500;
+      margin-bottom: 6px;
+      letter-spacing: 0.02em;
+    }
+
+    .control-label span.val {
+      font-family: var(--font-mono);
+      color: var(--accent);
+    }
+
+    select, input[type="range"] {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      outline: none;
+      transition: all 0.15s ease;
+    }
+
+    select {
+      padding: 7px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    select:focus {
+      border-color: var(--border-focus);
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.12);
+      cursor: pointer;
+      margin: 6px 0;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+      transition: transform 0.1s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    /* Button Grids */
+    .btn-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .btn-row.two-col {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    button {
+      padding: 7px 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    button:hover {
+      background: rgba(255, 255, 255, 0.09);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    button.active {
+      background: rgba(56, 189, 248, 0.14);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #030712;
+      font-weight: 600;
+    }
+
+    button.primary:hover {
+      background: var(--accent-hover);
+    }
+
+    /* Top Right: Telemetry & Hamiltonian Energy Monitor */
+    #panel-telemetry {
+      top: 20px;
+      right: 20px;
+      width: 290px;
+      padding: 16px;
+    }
+
+    .metric-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      font-size: 11.5px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .metric-row:last-child {
+      border-bottom: none;
+    }
+
+    .metric-name {
+      color: var(--text-muted);
+    }
+
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: #e2e8f0;
+      letter-spacing: -0.02em;
+    }
+
+    .metric-value.accent {
+      color: var(--accent);
+    }
+
+    .sparkline-container {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+
+    .sparkline-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10.5px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    #energy-sparkline {
+      width: 100%;
+      height: 48px;
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      display: block;
+    }
+
+    /* Bottom: Instructions bar */
+    #panel-hints {
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 8px 18px;
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      white-space: nowrap;
+    }
+
+    kbd {
+      font-family: var(--font-mono);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 2px 5px;
+      border-radius: 3px;
+      color: #fff;
+      font-size: 10px;
+    }
+
+    @media (max-width: 768px) {
+      #panel-hints {
+        display: none;
+      }
+      #panel-controls {
+        width: calc(100% - 40px);
+      }
+      #panel-telemetry {
+        top: auto;
+        bottom: 20px;
+        right: 20px;
+        left: 20px;
+        width: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="sim-canvas"></canvas>
+
+  <!-- Left Controls Panel -->
+  <aside id="panel-controls" class="glass-panel">
+    <div class="header-title">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="3" x2="12" y2="7"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      <h1>Barnes-Hut Engine</h1>
+      <span class="tag">O(N log N)</span>
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">Astronomical Preset</div>
+      <select id="select-preset"></select>
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>Opening Criterion (&theta;)</span>
+        <span class="val" id="val-theta">0.60</span>
+      </div>
+      <input type="range" id="slider-theta" min="0" max="1.4" step="0.05" value="0.6">
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>Timestep (&Delta;t)</span>
+        <span class="val" id="val-dt">0.150</span>
+      </div>
+      <input type="range" id="slider-dt" min="0.001" max="0.5" step="0.005" value="0.15">
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">
+        <span>Plummer Softening (&epsilon;)</span>
+        <span class="val" id="val-epsilon">4.0</span>
+      </div>
+      <input type="range" id="slider-epsilon" min="0.01" max="15" step="0.2" value="4.0">
+    </div>
+
+    <div class="btn-row">
+      <button id="btn-play-pause" class="active">Pause</button>
+      <button id="btn-step">Step</button>
+      <button id="btn-reset">Reset</button>
+    </div>
+
+    <div class="btn-row two-col" style="margin-top: 6px;">
+      <button id="btn-toggle-algo" class="active">Barnes-Hut</button>
+      <button id="btn-toggle-grid" class="active">QuadTree Grid</button>
+    </div>
+
+    <div class="btn-row" style="margin-top: 6px; grid-template-columns: 1fr;">
+      <button id="btn-toggle-trails" class="active">Particle Trails</button>
+    </div>
+  </aside>
+
+  <!-- Right Telemetry Panel -->
+  <aside id="panel-telemetry" class="glass-panel">
+    <div class="header-title" style="margin-bottom: 8px;">
+      <h1 style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);">Simulation Telemetry</h1>
+    </div>
+
+    <div class="metric-row">
+      <span class="metric-name">Active Bodies (N)</span>
+      <span class="metric-value accent" id="val-count">0</span>
+    </div>
+
+    <div class="metric-row">
+      <span class="metric-name">Frame Rate</span>
+      <span class="metric-value" id="val-fps">60 FPS</span>
+    </div>
+
+    <div class="metric-row">
+      <span class="metric-name">Compute Step Time</span>
+      <span class="metric-value" id="val-time">0.00 ms</span>
+    </div>
+
+    <div class="metric-row">
+      <span class="metric-name">Hamiltonian Energy (E)</span>
+      <span class="metric-value" id="val-energy">0.0</span>
+    </div>
+
+    <div class="metric-row">
+      <span class="metric-name">Relative Drift (&Delta;E/E<sub>0</sub>)</span>
+      <span class="metric-value accent" id="val-drift">0.00e+0%</span>
+    </div>
+
+    <div class="sparkline-container">
+      <div class="sparkline-header">
+        <span>Symplectic Energy Conservation</span>
+        <span>Bounded Error</span>
+      </div>
+      <canvas id="energy-sparkline" width="256" height="48"></canvas>
+    </div>
+  </aside>
+
+  <!-- Bottom Interaction Hints -->
+  <div id="panel-hints" class="glass-panel">
+    <span><kbd>Left-Click + Drag</kbd> Pan</span>
+    <span><kbd>Scroll</kbd> Zoom</span>
+    <span><kbd>Shift + Drag</kbd> Slingshot Body</span>
+    <span><kbd>Space</kbd> Play/Pause</span>
+    <span><kbd>R</kbd> Reset</span>
+    <span><kbd>C</kbd> Center</span>
+    <span><kbd>G</kbd> Grid</span>
+  </div>
+
+  <script type="module" src="./src/web/main.ts"></script>
+</body>
+</html>
